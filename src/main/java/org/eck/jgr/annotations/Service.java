@@ -6,6 +6,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
-@Target(value = ElementType.TYPE)
-public @interface JGR {
+@Target(value=ElementType.METHOD)
+public @interface Service {
+    String path();
+    String method();
 }
