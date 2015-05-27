@@ -7,8 +7,6 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(value=ElementType.METHOD)
-public @interface Service {
-    String path();
-    String method();
-    String[] before() default {};
+public @interface BeforeService {
+    String name();
 }

@@ -2,18 +2,29 @@ package org.eck.jgr;
 
 
 public class Param {
-    private String[] value;
+    private Object[] value;
 
-    public Param(String[] value) {
+    public Param(Object[] value) {
         super();
         this.value = value;
     }
 
-    private String first() {
+    private Object firstObject() {
         if (value != null && value.length > 0) {
             return value[0];
         }
         return null;
+    }
+
+    private String first() {
+        Object first = firstObject();
+        if(first != null) return first.toString();
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T as(Class<T> type) {
+        return (T) firstObject();
     }
 
     public Integer asInteger() {

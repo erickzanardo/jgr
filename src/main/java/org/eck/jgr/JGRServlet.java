@@ -15,6 +15,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.eck.jgr.annotations.BeforeService;
 import org.eck.jgr.annotations.JGR;
 import org.eck.jgr.annotations.Service;
 import org.eck.jgr.path.RouteParser;
@@ -27,6 +28,7 @@ public class JGRServlet extends HttpServlet {
     private String servicesPackage;
 
     private Map<String, Map<String, ServiceEntry>> services = new HashMap<String, Map<String, ServiceEntry>>();
+    private Map<String, BeforeServiceEntry> befores = new HashMap<String, JGRServlet.BeforeServiceEntry>();
 
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
@@ -45,6 +47,7 @@ public class JGRServlet extends HttpServlet {
             for (Method method : methods) {
                 Annotation[] annotations = method.getDeclaredAnnotations();
                 for (Annotation annotation : annotations) {
+                    // Services
                     if (annotation instanceof Service) {
                         Service s = (Service) annotation;
                         String httpMethod = s.method();
@@ -56,7 +59,14 @@ public class JGRServlet extends HttpServlet {
                         ServiceEntry se = new ServiceEntry();
                         se.setClazz(clazz);
                         se.setMethod(method);
+                        se.setBefore(s.before());
                         services.get(httpMethod).put(path, se);
+                    } else if (annotation instanceof BeforeService) {
+                        BeforeService beforeService = (BeforeService) annotation;
+                        BeforeServiceEntry entry = new BeforeServiceEntry();
+                        entry.setClazz(clazz);
+                        entry.setMethod(method);
+                        befores.put(beforeService.name(), entry);
                     }
                 }
             }
@@ -97,22 +107,32 @@ public class JGRServlet extends HttpServlet {
             for (Entry<String, ServiceEntry> entry : entrySet) {
                 if (RouteParser.macthes(entry.getKey(), url)) {
 
-                    Map<String, Param> params = new HashMap<String, Param>();
+                    Params params = new Params();
 
                     Enumeration parameterNames = req.getParameterNames();
                     while (parameterNames.hasMoreElements()) {
                         String name = (String) parameterNames.nextElement();
-                        params.put(name, new Param(req.getParameterValues(name)));
+                        params.addMultiValue(name, req.getParameterValues(name));
                     }
 
                     Map<String, String> parse = RouteParser.parse(entry.getKey(), url);
                     Set<Entry<String, String>> routeParams = parse.entrySet();
                     for (Entry<String, String> routeParam : routeParams) {
-                        params.put(routeParam.getKey(), new Param(new String[] { routeParam.getValue() }));
+                        params.addSingleValue(routeParam.getKey(), routeParam.getValue());
                     }
 
                     try {
                         ServiceEntry se = entry.getValue();
+                        if (se.getBefore() != null) {
+                            for (String s : se.getBefore()) {
+                                BeforeServiceEntry beforeServiceEntry = befores.get(s);
+                                Object newInstance = beforeServiceEntry.getClazz().newInstance();
+                                Boolean result = (Boolean) beforeServiceEntry.getMethod().invoke(newInstance, req, resp, params);
+                                if (!result) {
+                                    return;
+                                }
+                            }
+                        }
                         Object newInstance = se.getClazz().newInstance();
                         Method method = se.getMethod();
                         method.invoke(newInstance, req, resp, params);
@@ -128,7 +148,7 @@ public class JGRServlet extends HttpServlet {
     }
 
     @SuppressWarnings("rawtypes")
-    class ServiceEntry {
+    class BeforeServiceEntry {
         private Class clazz;
         private Method method;
 
@@ -146,6 +166,37 @@ public class JGRServlet extends HttpServlet {
 
         public void setMethod(Method method) {
             this.method = method;
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    class ServiceEntry {
+        private Class clazz;
+        private Method method;
+        private String[] before;
+
+        public Class getClazz() {
+            return clazz;
+        }
+
+        public void setClazz(Class clazz) {
+            this.clazz = clazz;
+        }
+
+        public Method getMethod() {
+            return method;
+        }
+
+        public void setMethod(Method method) {
+            this.method = method;
+        }
+
+        public String[] getBefore() {
+            return before;
+        }
+
+        public void setBefore(String[] before) {
+            this.before = before;
         }
     }
 }
